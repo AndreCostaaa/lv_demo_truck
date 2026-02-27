@@ -14,10 +14,7 @@ extern "C" {
  *      INCLUDES
  *********************/
 
-//#include "../lv_demos.h"
-#include "lvgl/demos/lv_demos.h"
-
-#if LV_USE_DEMO_GLTF
+#include <lvgl.h>
 
 /*********************
  *      DEFINES
@@ -37,7 +34,6 @@ lv_obj_t * lv_demo_truck(const char * path);
  *      MACROS
  **********************/
 
-#endif /*LV_USE_DEMO_GLTF*/
 
 #ifdef __cplusplus
 } /*extern "C"*/

@@ -7,9 +7,8 @@
  *      INCLUDES
  *********************/
 
-#include "lv_demo_truck.h"
+#include "lv_demo_truck/lv_demo_truck.h"
 
-#if LV_USE_DEMO_GLTF
 
 #include <stdio.h>
 
@@ -37,6 +36,7 @@ typedef struct {
     bool is_dragging;
     float sensitivity;
 } mouse_event_data_t;
+
 typedef struct {
     lv_obj_t * viewer;
     lv_obj_t * label;
@@ -309,7 +309,6 @@ static void brakes_press_event_handler(lv_event_t * e);
 static void brakes_pressing_event_handler(lv_event_t * e);
 static void brakes_released_event_handler(lv_event_t * e);
 
-
 static lv_obj_t * add_row(lv_obj_t * parent);
 static lv_obj_t * add_sep(lv_obj_t * parent);
 static lv_obj_t * add_button_to_row(lv_obj_t * row, lv_color_t color);
@@ -323,6 +322,7 @@ static lv_obj_t * add_foldout_header(lv_obj_t * parent, const char * title);
 
 static void viewer_observer_int_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void animation_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
+static void animation_speed_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void style_slider(lv_obj_t * slider, lv_color_t accent_color);
 static void style_control_panel(lv_obj_t * panel);
 
@@ -332,9 +332,6 @@ static double revolution_rate(double tire_radius, double travel_rate_kmh);
 /**********************
  *  STATIC VARIABLES
  **********************/
-
-static lv_gltf_set_int_fn_union_t animation_speed_fn = { .fn = lv_gltf_set_animation_speed };
-
 
 static lv_subject_t yaw_subject;
 static lv_subject_t pitch_subject;
@@ -474,14 +471,18 @@ static const char * node_steering_wheel_path = "/truck/027_steering_wheel_group/
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
+static const char * ui_assets_path = NULL;
 
-lv_obj_t * lv_demo_truck(const char * path)
+lv_obj_t * lv_demo_truck(const char * assets_path)
 {
+    ui_assets_path = assets_path;
     lv_obj_t * viewer = lv_gltf_create(lv_screen_active());
     lv_obj_set_size(viewer, LV_PCT(100), LV_PCT(100));
     lv_obj_remove_flag(viewer, LV_OBJ_FLAG_SCROLLABLE);
     lv_gltf_set_background_mode(viewer, LV_GLTF_BG_MODE_SOLID);
-    lv_gltf_model_t * model = lv_gltf_load_model_from_file(viewer, path);
+    char truck_model_path[256];
+    lv_snprintf(truck_model_path, sizeof(truck_model_path), "%s/%s", ui_assets_path, "lv_truck.glb");
+    lv_gltf_model_t * model = lv_gltf_load_model_from_file(viewer, truck_model_path);
     LV_ASSERT_NULL(model);
 
     init_subjects(viewer);
@@ -1977,7 +1978,7 @@ static void init_subjects(lv_obj_t * viewer)
     lv_subject_init_int(&animation_speed_subject, LV_GLTF_ANIM_SPEED_NORMAL);
     lv_subject_init_int(&animation_subject, lv_gltf_model_get_animation(lv_gltf_get_primary_model(viewer)));
     lv_subject_add_observer(&animation_subject, animation_observer_cb, viewer);
-    lv_subject_add_observer_obj(&animation_speed_subject, viewer_observer_int_cb, viewer, animation_speed_fn.ptr);
+    lv_subject_add_observer(&animation_speed_subject, animation_speed_observer_cb, viewer);
 }
 
 static void init_checkbox_states(void)
@@ -2040,7 +2041,9 @@ static void create_about_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_remove_flag(logo_viewer, LV_OBJ_FLAG_SCROLLABLE);
     lv_gltf_set_background_mode(logo_viewer, LV_GLTF_BG_MODE_SOLID);
 
-    lv_gltf_model_t * model = lv_gltf_load_model_from_file(logo_viewer, "assets/lvgl_logo_with_text.glb");
+    char logo_model_path[256];
+    lv_snprintf(logo_model_path, sizeof(logo_model_path), "%s/%s", ui_assets_path, "lvgl_logo_with_text.glb");
+    lv_gltf_model_t * model = lv_gltf_load_model_from_file(logo_viewer, logo_model_path);
     LV_ASSERT_NULL(model);
     lv_gltf_model_play_animation(model, 0);
     lv_gltf_set_camera(logo_viewer, 1);
@@ -2629,4 +2632,11 @@ static void animation_observer_cb(lv_observer_t * observer, lv_subject_t * subje
     lv_gltf_model_play_animation(model, value);
 }
 
-#endif /*LV_USE_DEMO_GLTF*/
+static void animation_speed_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    int value = lv_subject_get_int(subject);
+    lv_obj_t * viewer = lv_observer_get_user_data(observer);
+    lv_gltf_model_t * model = lv_gltf_get_primary_model(viewer);
+
+    lv_gltf_model_set_animation_speed(model, value);
+}

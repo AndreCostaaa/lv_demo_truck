@@ -1,173 +1,125 @@
-/*******************************************************************
- *
- * main.c - LVGL simulator for GNU/Linux
- *
- * Based on the original file from the repository
- *
- * @note eventually this file won't contain a main function and will
- * become a library supporting all major operating systems
- *
- * To see how each driver is initialized check the
- * 'src/lib/display_backends' directory
- *
- * - Clean up
- * - Support for multiple backends at once
- *   2025 EDGEMTech Ltd.
- *
- * Author: EDGEMTech Ltd, Erik Tagirov (erik.tagirov@edgemtech.ch)
- *
- ******************************************************************/
+#include <lvgl.h>
+#include <lv_demo_truck/lv_demo_truck.h>
+#include <stdint.h>
 #include <unistd.h>
-#include <pthread.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include "lvgl/lvgl.h"
-#include "lv_demo_truck.h"
+static lv_display_t * init_drm(void);
+static lv_display_t * init_sdl(void);
+static lv_display_t * init_wayland(void);
+static lv_result_t init_evdev(lv_display_t * disp);
+static void discovery_cb(lv_indev_t * indev, lv_evdev_type_t type, void * user_data);
 
-#include "src/lib/driver_backends.h"
-#include "src/lib/simulator_util.h"
-#include "src/lib/simulator_settings.h"
+typedef lv_display_t * (*init_backend_t)(void);
 
-/* Internal functions */
-static void configure_simulator(int argc, char **argv);
-static void print_lvgl_version(void);
-static void print_usage(void);
+typedef struct {
+    const char * name;
+    init_backend_t init;
+} backend_t;
 
-/* contains the name of the selected backend if user
- * has specified one on the command line */
-static char *selected_backend;
+static const backend_t backends[] = {
+    {.name = "drm",     .init = init_drm},
+    {.name = "wayland", .init = init_wayland},
+    {.name = "sdl",     .init = init_sdl},
+};
 
-/* Global simulator settings, defined in lv_linux_backend.c */
-extern simulator_settings_t settings;
-
-
-/**
- * @brief Print LVGL version
- */
-static void print_lvgl_version(void)
+int main(int argc, const char ** argv)
 {
-    fprintf(stdout, "%d.%d.%d-%s\n",
-            LVGL_VERSION_MAJOR,
-            LVGL_VERSION_MINOR,
-            LVGL_VERSION_PATCH,
-            LVGL_VERSION_INFO);
-}
-
-/**
- * @brief Print usage information
- */
-static void print_usage(void)
-{
-    fprintf(stdout, "\nlvglsim [-V] [-B] [-b backend_name] [-W window_width] [-H window_height]\n\n");
-    fprintf(stdout, "-V print LVGL version\n");
-    fprintf(stdout, "-B list supported backends\n");
-}
-
-/**
- * @brief Configure simulator
- * @description process arguments recieved by the program to select
- * appropriate options
- * @param argc the count of arguments in argv
- * @param argv The arguments
- */
-static void configure_simulator(int argc, char **argv)
-{
-    int opt = 0;
-
-    selected_backend = NULL;
-    driver_backends_register();
-
-    const char *env_w = getenv("LV_SIM_WINDOW_WIDTH");
-    const char *env_h = getenv("LV_SIM_WINDOW_HEIGHT");
-    /* Default values */
-    settings.window_width = atoi(env_w ? env_w : "800");
-    settings.window_height = atoi(env_h ? env_h : "480");
-
-    /* Parse the command-line options. */
-    while ((opt = getopt (argc, argv, "b:fmW:H:BVh")) != -1) {
-        switch (opt) {
-        case 'h':
-            print_usage();
-            exit(EXIT_SUCCESS);
-            break;
-        case 'V':
-            print_lvgl_version();
-            exit(EXIT_SUCCESS);
-            break;
-        case 'B':
-            driver_backends_print_supported();
-            exit(EXIT_SUCCESS);
-            break;
-        case 'b':
-            if (driver_backends_is_supported(optarg) == 0) {
-                die("error no such backend: %s\n", optarg);
-            }
-            selected_backend = strdup(optarg);
-            break;
-        case 'W':
-            settings.window_width = atoi(optarg);
-            break;
-        case 'H':
-            settings.window_height = atoi(optarg);
-            break;
-        case ':':
-            print_usage();
-            die("Option -%c requires an argument.\n", optopt);
-            break;
-        case '?':
-            print_usage();
-            die("Unknown option -%c.\n", optopt);
-        }
+    const char * ui_assets_path = "ui/assets";
+    if(argc < 2) {
+        LV_LOG_WARN("Assets Path not set, assuming `ui/assets`");
     }
-}
+    else {
+        ui_assets_path = argv[1];
+    }
+    LV_LOG_USER("Assets path is %s", ui_assets_path);
 
-/**
- * @brief entry point
- * @description start a demo
- * @param argc the count of arguments in argv
- * @param argv The arguments
- */
-int main(int argc, char **argv)
-{
-
-    configure_simulator(argc, argv);
-
-    /* Initialize LVGL. */
     lv_init();
-
-    /* Initialize the configured backend */
-    if (driver_backends_init_backend(selected_backend) == -1) {
-        die("Failed to initialize display backend");
+    const size_t backend_count =  LV_ARRAYLEN(backends);
+    lv_display_t * display;
+    for(size_t i  = 0; i < backend_count; ++i) {
+        display = backends[i].init();
+        if(!display) {
+            LV_LOG_WARN("Failed to init '%s' backend", backends[i].name);
+            continue;
+        }
+        break;
+    }
+    if(!display) {
+        LV_LOG_ERROR("Failed to create a LVGL display");
+        return 1;
     }
 
-    /* Enable for EVDEV support */
-#if LV_USE_EVDEV
-    if (driver_backends_init_backend("EVDEV") == -1) {
-        die("Failed to initialize evdev");
-    }
-#endif
+    lv_demo_truck(ui_assets_path);
 
-#if LV_USE_DEMO_GLTF
-    uint32_t start_tick = lv_tick_get();
-	lv_obj_t * viewer = lv_demo_truck( "assets/truck_carveup_8.glb");
-    
-	LV_LOG("GLTF load time %u\n", lv_tick_elaps(start_tick));
-	
-    lv_gltf_set_background_mode(viewer, LV_GLTF_BG_MODE_SOLID);
-	lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x516285), 0);
-	lv_obj_set_style_bg_color(viewer, lv_color_hex(0x516285), 0);
-	lv_obj_set_style_bg_opa(viewer, LV_OPA_0, 0);
-    lv_gltf_set_env_brightness(viewer, 250);
+    while(1) {
+        uint32_t ms = lv_timer_handler();
+        if(ms == LV_NO_TIMER_READY) {
+            ms = LV_DEF_REFR_PERIOD;
+        }
+        usleep(ms * 1000);
+    }
+    lv_deinit();
+}
+
+
+static lv_display_t * init_sdl(void)
+{
+#if !LV_USE_SDL
+    return NULL;
 #else
-    /*Create a Demo*/
-    lv_demo_widgets();
-    lv_demo_widgets_start_slideshow();
+    lv_display_t * disp = lv_sdl_window_create(1920, 1080);
+    lv_indev_t * mouse = lv_sdl_mouse_create();
+    lv_indev_set_group(mouse, lv_group_get_default());
+    return disp;
 #endif
+}
+static lv_display_t * init_drm(void)
+{
+    char * device = lv_linux_drm_find_device_path();
+    lv_display_t * disp = lv_linux_drm_create();
 
-    /* Enter the run loop of the selected backend */
-    driver_backends_run_loop();
+    if(disp == NULL) {
+        LV_LOG_WARN("lv_linux_drm_create failed");
+        return NULL;
+    }
 
-    return 0;
+    lv_result_t res = lv_linux_drm_set_file(disp, device, -1);
+    lv_free(device);
+    if(res != LV_RESULT_OK) {
+        lv_display_delete(disp);
+        LV_LOG_WARN("lv_linux_drm_set_file failed");
+        return NULL;
+    }
+    res = init_evdev(disp);
+    if(res != LV_RESULT_OK) {
+        LV_LOG_WARN("Failed to initialize evdev");
+    }
+    LV_LOG_USER("DRM initialized");
+    return disp;
+}
+
+static lv_display_t * init_wayland(void)
+{
+    lv_display_t * disp = lv_wayland_window_create(1024, 600, "Renesas Oven 3D Demo", NULL);
+    if(!disp) {
+        LV_LOG_WARN("lv_wayland_window_create failed");
+    }
+    LV_LOG_USER("Wayland initialized");
+    return disp;
+}
+
+static lv_result_t init_evdev(lv_display_t * disp)
+{
+    return lv_evdev_discovery_start(discovery_cb, disp);
+}
+
+static void discovery_cb(lv_indev_t * indev, lv_evdev_type_t type, void * user_data)
+{
+    LV_LOG_USER("new '%s' device discovered", type == LV_EVDEV_TYPE_REL ? "REL" :
+                type == LV_EVDEV_TYPE_ABS ? "ABS" :
+                type == LV_EVDEV_TYPE_KEY ? "KEY" :
+                "unknown");
+
+    lv_display_t * disp = user_data;
+    lv_indev_set_display(indev, disp);
 }
