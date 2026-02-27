@@ -94,7 +94,7 @@ if(CONFIG_LV_USE_WAYLAND)
                 ${WAYLAND_CLIENT_LIBRARIES} ${WAYLAND_CURSOR_LIBRARIES})
 
   # Wayland protocols
-  pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols>=1.25)
+  pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
   pkg_get_variable(WAYLAND_PROTOCOLS_BASE wayland-protocols pkgdatadir)
 
   if(DEFINED ENV{SDKTARGETSYSROOT} AND DEFINED ENV{SYSROOT})
@@ -194,8 +194,9 @@ if(ASAN)
 endif()
 
 if(CONFIG_LV_USE_WAYLAND)
-  target_link_libraries(lv_demo_truck PUBLIC lv_demo_truck_ui lvgl
-                                             lv_demo_truck_wayland_protocols)
+  target_link_libraries(
+    lv_demo_truck PUBLIC lv_demo_truck_ui lvgl lv_demo_truck_wayland_protocols
+                         rt dl)
 else()
-  target_link_libraries(lv_demo_truck PUBLIC lv_demo_truck_ui lvgl)
+  target_link_libraries(lv_demo_truck PUBLIC lv_demo_truck_ui lvgl rt dl)
 endif()
