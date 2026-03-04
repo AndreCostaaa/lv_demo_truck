@@ -47,7 +47,7 @@ typedef void (*lv_gltf_set_int_fn)(lv_obj_t *, uint32_t);
 
 typedef union {
     void * ptr;
-    lv_gltf_set_float_fn fn;
+    lv_gltf_set_float_fn cb;
 } lv_gltf_set_float_fn_union_t;
 
 typedef union {
@@ -128,7 +128,7 @@ typedef struct lv_demo_truck_paintset_ {
     lv_gltf_model_node_t * door_BD_node;
     lv_gltf_model_node_t * door_BP_node;
     lv_gltf_model_node_t * tailgate_node;
-    lv_obj_t * checkbox;
+    lv_obj_t * button;
 } lv_demo_truck_paintset_t;
 
 typedef struct lv_demo_truck_lightset_controller_ {
@@ -151,9 +151,6 @@ typedef struct lv_demo_truck_lightset_controller_ {
     lv_demo_truck_blinker_setting blinker_setting;
     lv_demo_truck_headlights_setting headlights_setting;
     lv_demo_truck_headlights_setting last_applied_headlights_setting;
-    lv_obj_t * checkbox_left_blinker;
-    lv_obj_t * checkbox_right_blinker;
-    lv_obj_t * checkbox_hazard_blinker;
     lv_obj_t * checkbox_headlights_low;
     lv_obj_t * checkbox_headlights_high;
 } lv_demo_truck_lightset_controller_t;
@@ -168,9 +165,9 @@ typedef struct lv_demo_truck_wipers_controller_ {
     uint32_t last_anim_value;
     lv_demo_truck_wipers_setting wipers_setting;
     lv_demo_truck_wipers_setting next_wipers_setting;
-    lv_obj_t * checkbox_wipers_low;
-    lv_obj_t * checkbox_wipers_med;
-    lv_obj_t * checkbox_wipers_high;
+    lv_obj_t * btn_wipers_low;
+    lv_obj_t * btn_wipers_med;
+    lv_obj_t * btn_wipers_high;
 } lv_demo_truck_wipers_controller_t;
 
 typedef struct lv_demo_truck_interior_controller_ {
@@ -194,6 +191,7 @@ typedef struct lv_demo_truck_camera_controller_ {
 
     lv_obj_t * checkbox_camera_interior;
     lv_obj_t * checkbox_camera_exterior;
+    lv_obj_t * checkbox_camera_free;
 
     lv_demo_truck_camera_setting next_camera_setting;
     lv_demo_truck_camera_setting camera_setting;
@@ -291,7 +289,7 @@ static void toggle_sunroof_event_handler(lv_event_t * e);
 static void select_paintset_A_event_handler(lv_event_t * e);
 static void select_paintset_B_event_handler(lv_event_t * e);
 static void select_paintset_C_event_handler(lv_event_t * e);
-static void toggle_dirty_event_handler(lv_event_t * e);
+static void toggle_mud_event_handler(lv_event_t * e);
 static void select_speed_event_handler(lv_event_t * e);
 static void select_mph_event_handler(lv_event_t * e);
 static void select_kmph_event_handler(lv_event_t * e);
@@ -304,6 +302,7 @@ static void select_wipers_med_event_handler(lv_event_t * e);
 static void select_wipers_high_event_handler(lv_event_t * e);
 static void select_camera_interior_event_handler(lv_event_t * e);
 static void select_camera_exterior_event_handler(lv_event_t * e);
+static void select_camera_free_event_handler(lv_event_t * e);
 static void toggle_antialias_event_handler(lv_event_t * e);
 static void brakes_press_event_handler(lv_event_t * e);
 static void brakes_pressing_event_handler(lv_event_t * e);
@@ -324,7 +323,9 @@ static void viewer_observer_int_cb(lv_observer_t * observer, lv_subject_t * subj
 static void animation_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void animation_speed_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
 static void style_slider(lv_obj_t * slider, lv_color_t accent_color);
+static void style_toggle_button(lv_obj_t * btn, lv_color_t accent_color);
 static void style_control_panel(lv_obj_t * panel);
+static void style_checkbox(lv_obj_t * checkbox, lv_color_t accent_color);
 
 static double distance_per_revolution(double tire_radius);
 static double revolution_rate(double tire_radius, double travel_rate_kmh);
@@ -338,6 +339,9 @@ static lv_subject_t pitch_subject;
 static lv_subject_t animation_subject;
 static lv_subject_t animation_speed_subject;
 
+static lv_gltf_set_float_fn_union_t pitch_fn = { .cb = lv_gltf_set_pitch };
+static lv_gltf_set_float_fn_union_t yaw_fn = { .cb = lv_gltf_set_yaw };
+
 static lv_demo_truck_hatch_t * door_FD_open_close;
 static lv_demo_truck_hatch_t * door_FP_open_close;
 static lv_demo_truck_hatch_t * door_BD_open_close;
@@ -350,9 +354,9 @@ static lv_demo_truck_hatch_t * window_BD_open_close;
 static lv_demo_truck_hatch_t * window_BP_open_close;
 static lv_demo_truck_hatch_t * sunroof_open_close;
 
-static lv_demo_truck_paintset_t * paintset_A;
-static lv_demo_truck_paintset_t * paintset_B;
-static lv_demo_truck_paintset_t * paintset_C;
+static lv_demo_truck_paintset_t * paintset_red;
+static lv_demo_truck_paintset_t * paintset_gray;
+static lv_demo_truck_paintset_t * paintset_green;
 
 static lv_demo_truck_tireset_controller_t * tireset_controller;
 static lv_demo_truck_lightset_controller_t * lights_controller;
@@ -360,23 +364,24 @@ static lv_demo_truck_wipers_controller_t * wipers_controller;
 static lv_demo_truck_interior_controller_t * interior_controller;
 static lv_demo_truck_camera_controller_t * camera_controller;
 
-lv_gltf_model_node_t * node_dirty_overlay_1;
-lv_gltf_model_node_t * node_dirty_overlay_2;
-lv_gltf_model_node_t * node_dirty_overlay_3;
+static lv_gltf_model_node_t * node_dirty_overlay_1;
+static lv_gltf_model_node_t * node_dirty_overlay_2;
+static lv_gltf_model_node_t * node_dirty_overlay_3;
+static lv_obj_t * open_all_doors_btn;
+static lv_obj_t * close_all_doors_btn;
+static lv_obj_t * open_all_windows_btn;
+static lv_obj_t * close_all_windows_btn;
 
-lv_obj_t * open_all_doors_btn;
-lv_obj_t * close_all_doors_btn;
+static lv_obj_t * left_blinker_btn;
+static lv_obj_t * hazard_blinker_btn;
+static lv_obj_t * right_blinker_btn;
 
-lv_obj_t * open_all_windows_btn;
-lv_obj_t * close_all_windows_btn;
-
-lv_obj_t * dirty_checkbox;
-lv_obj_t * checkbox_antialiasing;
-
-lv_demo_foldout_t * last_opened_foldout = NULL;
-
-lv_obj_t * logo_viewer = NULL;
-
+static lv_obj_t * mud_toggle_btn;
+static bool has_mud = false;
+static lv_obj_t * dirty_checkbox;
+static lv_obj_t * checkbox_antialiasing;
+static lv_demo_foldout_t * last_opened_foldout = NULL;
+static lv_obj_t * logo_viewer = NULL;
 
 static const float MAX_SPIN_SLIDER_VALUE = 10000.f;
 static const float MIN_MAX_STEER_SLIDER_VALUE = 5000.f;
@@ -477,14 +482,20 @@ lv_obj_t * lv_demo_truck(const char * assets_path)
 {
     ui_assets_path = assets_path;
     lv_obj_t * viewer = lv_gltf_create(lv_screen_active());
+
+    lv_gltf_set_distance(viewer, .15);
+    // lv_gltf_set_pitch(viewer, -85.f);
     lv_obj_set_size(viewer, LV_PCT(100), LV_PCT(100));
     lv_obj_remove_flag(viewer, LV_OBJ_FLAG_SCROLLABLE);
     lv_gltf_set_background_mode(viewer, LV_GLTF_BG_MODE_SOLID);
+
+    // lv_gltf_set_focal_x(viewer, -10.f);
     char truck_model_path[256];
     lv_snprintf(truck_model_path, sizeof(truck_model_path), "%s/%s", ui_assets_path, "lv_truck.glb");
     lv_gltf_model_t * model = lv_gltf_load_model_from_file(viewer, truck_model_path);
     LV_ASSERT_NULL(model);
 
+    lv_gltf_set_focal_y(viewer, 1);
     init_subjects(viewer);
     init_anim_controllers(viewer);
     init_paintset_controllers(viewer);
@@ -508,7 +519,6 @@ lv_obj_t * lv_demo_truck(const char * assets_path)
     lv_obj_add_event_cb(viewer, on_mouse_event, LV_EVENT_PRESS_LOST, mouse_state);
     lv_obj_add_event_cb(viewer, on_mouse_event, LV_EVENT_DELETE, mouse_state);
 
-    lv_gltf_set_camera(viewer, LV_DEMO_GLTF_CAMERA_NUM);
 
     close_all_windows();
     close_all_doors();
@@ -518,7 +528,7 @@ lv_obj_t * lv_demo_truck(const char * assets_path)
     close_hatch(tailgate_open_close);
     close_hatch(hood_open_close);
     close_hatch(sunroof_open_close);
-    set_camera_num(camera_controller, LV_CAMERA_EXTERIOR);
+    set_camera_num(camera_controller, LV_CAMERA_UNSET);
     init_checkbox_states();
     select_paintset_A();
     enable_antialiasing(true);
@@ -537,7 +547,7 @@ static lv_demo_foldout_t * lv_demo_foldout(lv_obj_t * parent, const char * title
     lv_memzero(foldout, sizeof(*foldout));
 
     lv_obj_t * title_btn = lv_button_create(parent);
-    lv_obj_set_size(title_btn, LV_PCT(85), 30);
+    lv_obj_set_size(title_btn, LV_PCT(100), 30);
     lv_obj_set_style_bg_color(title_btn, lv_color_hex(0xFF6B35), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(title_btn, LV_OPA_0, LV_PART_MAIN);
     lv_obj_set_style_radius(title_btn, 0, 0);
@@ -564,6 +574,7 @@ static lv_demo_foldout_t * lv_demo_foldout(lv_obj_t * parent, const char * title
     lv_obj_t * foldout_contents = add_row(parent);
     lv_obj_set_style_pad_all(foldout_contents, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_all(foldout_contents, 0, LV_PART_MAIN);
+    lv_obj_set_width(foldout_contents, LV_PCT(100));
 
     lv_obj_t * title_row = add_row(foldout_contents);
     lv_obj_set_style_margin_top(title_row, 2, 0);
@@ -1218,6 +1229,9 @@ static void on_mouse_event(lv_event_t * e)
                     new_pitch = 89.0f;
                 if(new_pitch < -89.0f)
                     new_pitch = -89.0f;
+                if(new_pitch > 0)
+                    new_pitch = 0;
+
 
                 lv_subject_set_float(&yaw_subject, new_yaw);
                 lv_subject_set_float(&pitch_subject, new_pitch);
@@ -1370,13 +1384,20 @@ static void select_paintset_C_event_handler(lv_event_t * e)
     LV_UNUSED(e);
     select_paintset_C();
 }
-static void toggle_dirty_event_handler(lv_event_t * e)
+
+static void toggle_mud_event_handler(lv_event_t * e)
 {
-    if(lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED)) {
-        apply_dirt(true);
+    has_mud = !has_mud;
+    apply_dirt(has_mud);
+    lv_obj_t * btn = lv_event_get_target_obj(e);
+    lv_obj_t * btn_label = lv_obj_get_child(btn, 0);
+    if(has_mud) {
+        lv_label_set_text_static(btn_label, "Remove mud");
+        lv_obj_remove_state(btn, LV_STATE_CHECKED);
     }
     else {
-        apply_dirt(false);
+        lv_obj_add_state(btn, LV_STATE_CHECKED);
+        lv_label_set_text_static(btn_label, "Add mud");
     }
 }
 static void select_speed_event_handler(lv_event_t * e)
@@ -1455,6 +1476,12 @@ static void select_camera_exterior_event_handler(lv_event_t * e)
 {
     LV_UNUSED(e);
     set_camera_num(camera_controller, LV_CAMERA_EXTERIOR);
+}
+
+static void select_camera_free_event_handler(lv_event_t * e)
+{
+    LV_UNUSED(e);
+    set_camera_num(camera_controller, LV_CAMERA_UNSET);
 }
 static void toggle_antialias_event_handler(lv_event_t * e)
 {
@@ -1619,27 +1646,26 @@ static void set_lightset_blinker_type(lv_demo_truck_lightset_controller_t * ligh
     if(lights->blinker_setting == blinker_type) {
         blinker_type = LV_BLINKER_NONE;
     }
+    lv_obj_remove_state(left_blinker_btn, LV_STATE_CHECKED);
+    lv_obj_remove_state(right_blinker_btn, LV_STATE_CHECKED);
+    lv_obj_remove_state(hazard_blinker_btn, LV_STATE_CHECKED);
     lights->blinker_setting = blinker_type;
     lights->blinker_set_angle = tireset_controller->last_steer_angle;
     lights->blinker_ext_angle = tireset_controller->last_steer_angle;
-    lv_obj_remove_state(lights->checkbox_left_blinker, LV_STATE_CHECKED);
-    lv_obj_remove_state(lights->checkbox_right_blinker, LV_STATE_CHECKED);
-    lv_obj_remove_state(lights->checkbox_hazard_blinker, LV_STATE_CHECKED);
     switch(blinker_type) {
+        case LV_BLINKER_UNSET:
+        case LV_BLINKER_NONE:
+            break;
         case LV_BLINKER_LEFT:
-            lv_obj_add_state(lights->checkbox_left_blinker, LV_STATE_CHECKED);
+            lv_obj_add_state(left_blinker_btn, LV_STATE_CHECKED);
             break;
         case LV_BLINKER_RIGHT:
-            lv_obj_add_state(lights->checkbox_right_blinker, LV_STATE_CHECKED);
+            lv_obj_add_state(right_blinker_btn, LV_STATE_CHECKED);
             break;
         case LV_BLINKER_HAZARD:
-            lv_obj_add_state(lights->checkbox_hazard_blinker, LV_STATE_CHECKED);
-            break;
-        case LV_BLINKER_NONE:
-        default:
+            lv_obj_add_state(hazard_blinker_btn, LV_STATE_CHECKED);
             break;
     }
-
 }
 
 static void set_lightset_headlight_type(lv_demo_truck_lightset_controller_t * lights,
@@ -1667,21 +1693,23 @@ static void set_lightset_headlight_type(lv_demo_truck_lightset_controller_t * li
 
 static void set_camera_num(lv_demo_truck_camera_controller_t * cameras, lv_demo_truck_camera_setting camera_type)
 {
-    if(cameras->next_camera_setting == camera_type) {
-        return;
-    }
     cameras->next_camera_setting = camera_type;
     lv_obj_remove_state(cameras->checkbox_camera_interior, LV_STATE_CHECKED);
     lv_obj_remove_state(cameras->checkbox_camera_exterior, LV_STATE_CHECKED);
+    lv_obj_remove_state(cameras->checkbox_camera_free, LV_STATE_CHECKED);
     switch(camera_type) {
         case LV_CAMERA_INTERIOR:
             lv_obj_add_state(cameras->checkbox_camera_interior, LV_STATE_CHECKED);
             lv_gltf_set_camera(cameras->viewer, 2);
             break;
         case LV_CAMERA_EXTERIOR:
-        default:
             lv_obj_add_state(cameras->checkbox_camera_exterior, LV_STATE_CHECKED);
             lv_gltf_set_camera(cameras->viewer, 1);
+            break;
+        case LV_CAMERA_UNSET:
+        default:
+            lv_obj_add_state(cameras->checkbox_camera_free, LV_STATE_CHECKED);
+            lv_gltf_set_camera(cameras->viewer, 0);
             break;
     }
 
@@ -1695,18 +1723,18 @@ static void set_wiper_speed(lv_demo_truck_wipers_controller_t * wipers, lv_demo_
     //wipers->wipers_setting = wipers_setting;
     wipers->next_wipers_setting = wipers_setting;
 
-    lv_obj_remove_state(wipers->checkbox_wipers_low, LV_STATE_CHECKED);
-    lv_obj_remove_state(wipers->checkbox_wipers_med, LV_STATE_CHECKED);
-    lv_obj_remove_state(wipers->checkbox_wipers_high, LV_STATE_CHECKED);
+    lv_obj_remove_state(wipers->btn_wipers_low, LV_STATE_CHECKED);
+    lv_obj_remove_state(wipers->btn_wipers_med, LV_STATE_CHECKED);
+    lv_obj_remove_state(wipers->btn_wipers_high, LV_STATE_CHECKED);
     switch(wipers_setting) {
         case LV_WIPERS_INT:
-            lv_obj_add_state(wipers->checkbox_wipers_low, LV_STATE_CHECKED);
+            lv_obj_add_state(wipers->btn_wipers_low, LV_STATE_CHECKED);
             break;
         case LV_WIPERS_LOW:
-            lv_obj_add_state(wipers->checkbox_wipers_med, LV_STATE_CHECKED);
+            lv_obj_add_state(wipers->btn_wipers_med, LV_STATE_CHECKED);
             break;
         case LV_WIPERS_HIGH:
-            lv_obj_add_state(wipers->checkbox_wipers_high, LV_STATE_CHECKED);
+            lv_obj_add_state(wipers->btn_wipers_high, LV_STATE_CHECKED);
             break;
         case LV_WIPERS_OFF:
         default:
@@ -1714,6 +1742,15 @@ static void set_wiper_speed(lv_demo_truck_wipers_controller_t * wipers, lv_demo_
     }
     if(wipers->running_anim == NULL) wipers->running_anim = lv_anim_start(&(wipers->anim_template));
 
+}
+
+static void viewer_observer_float_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    lv_obj_t * viewer = lv_observer_get_target_obj(observer);
+    float value = lv_subject_get_float(subject);
+    lv_gltf_set_float_fn_union_t fn_union = { .ptr = lv_observer_get_user_data(observer) };
+
+    fn_union.cb(viewer, value);
 }
 
 static void set_tireset_speed_ratio(lv_demo_truck_tireset_controller_t * tireset, float max_speed_ratio)
@@ -1742,26 +1779,26 @@ static void set_tireset_steer_ratio(lv_demo_truck_tireset_controller_t * tireset
 static void select_paintset_A(void)
 {
     hide_all_paintsets();
-    show_paintset(paintset_A);
+    show_paintset(paintset_red);
 }
 
 static void select_paintset_B(void)
 {
     hide_all_paintsets();
-    show_paintset(paintset_B);
+    show_paintset(paintset_gray);
 }
 
 static void select_paintset_C(void)
 {
     hide_all_paintsets();
-    show_paintset(paintset_C);
+    show_paintset(paintset_green);
 }
 
 static void hide_all_paintsets(void)
 {
-    hide_paintset(paintset_A);
-    hide_paintset(paintset_B);
-    hide_paintset(paintset_C);
+    hide_paintset(paintset_red);
+    hide_paintset(paintset_gray);
+    hide_paintset(paintset_green);
 }
 
 static void hide_node(lv_gltf_model_node_t * node)
@@ -1783,6 +1820,7 @@ static void show_node(lv_gltf_model_node_t * node)
 static void show_paintset(lv_demo_truck_paintset_t * paintset)
 {
     LV_ASSERT_NULL(paintset);
+    lv_obj_add_state(paintset->button, LV_STATE_CHECKED);
     show_node(paintset->body_node);
     show_node(paintset->hood_node);
     show_node(paintset->door_FD_node);
@@ -1790,13 +1828,12 @@ static void show_paintset(lv_demo_truck_paintset_t * paintset)
     show_node(paintset->door_BD_node);
     show_node(paintset->door_BP_node);
     show_node(paintset->tailgate_node);
-    lv_obj_add_state(paintset->checkbox, LV_STATE_CHECKED);
-
 }
 
 static void hide_paintset(lv_demo_truck_paintset_t * paintset)
 {
     LV_ASSERT_NULL(paintset);
+    lv_obj_remove_state(paintset->button, LV_STATE_CHECKED);
     hide_node(paintset->body_node);
     hide_node(paintset->hood_node);
     hide_node(paintset->door_FD_node);
@@ -1804,7 +1841,6 @@ static void hide_paintset(lv_demo_truck_paintset_t * paintset)
     hide_node(paintset->door_BD_node);
     hide_node(paintset->door_BP_node);
     hide_node(paintset->tailgate_node);
-    lv_obj_remove_state(paintset->checkbox, LV_STATE_CHECKED);
 }
 
 static void apply_dirt(bool truck_is_dirty)
@@ -1858,6 +1894,7 @@ static void open_all_windows(void)
     open_hatch(window_FP_open_close);
     open_hatch(window_BD_open_close);
     open_hatch(window_BP_open_close);
+    open_hatch(sunroof_open_close);
 }
 
 static void close_all_windows(void)
@@ -1866,6 +1903,7 @@ static void close_all_windows(void)
     close_hatch(window_FP_open_close);
     close_hatch(window_BD_open_close);
     close_hatch(window_BP_open_close);
+    close_hatch(sunroof_open_close);
 }
 
 static void open_hatch(lv_demo_truck_hatch_t * hatch)
@@ -1933,12 +1971,13 @@ static void init_anim_controllers(lv_obj_t * viewer)
 
 static void init_paintset_controllers(lv_obj_t * viewer)
 {
-    paintset_A = lv_demo_truck_paintset(viewer, paintset_A_body, paintset_A_hood, paintset_A_door_FD, paintset_A_door_FP,
-                                        paintset_A_door_BD, paintset_A_door_BP, paintset_A_tailgate);
-    paintset_B = lv_demo_truck_paintset(viewer, paintset_B_body, paintset_B_hood, paintset_B_door_FD, paintset_B_door_FP,
-                                        paintset_B_door_BD, paintset_B_door_BP, paintset_B_tailgate);
-    paintset_C = lv_demo_truck_paintset(viewer, paintset_C_body, paintset_C_hood, paintset_C_door_FD, paintset_C_door_FP,
-                                        paintset_C_door_BD, paintset_C_door_BP, paintset_C_tailgate);
+    paintset_red = lv_demo_truck_paintset(viewer, paintset_A_body, paintset_A_hood, paintset_A_door_FD, paintset_A_door_FP,
+                                          paintset_A_door_BD, paintset_A_door_BP, paintset_A_tailgate);
+    paintset_gray = lv_demo_truck_paintset(viewer, paintset_B_body, paintset_B_hood, paintset_B_door_FD, paintset_B_door_FP,
+                                           paintset_B_door_BD, paintset_B_door_BP, paintset_B_tailgate);
+    paintset_green = lv_demo_truck_paintset(viewer, paintset_C_body, paintset_C_hood, paintset_C_door_FD,
+                                            paintset_C_door_FP,
+                                            paintset_C_door_BD, paintset_C_door_BP, paintset_C_tailgate);
 
     lv_gltf_model_t * model = lv_gltf_get_primary_model(viewer);
     node_dirty_overlay_1 = lv_gltf_model_node_get_by_path(model, dirty_overlay_1);
@@ -1975,10 +2014,14 @@ static void init_camera_controller(lv_obj_t * viewer)
 
 static void init_subjects(lv_obj_t * viewer)
 {
+    lv_subject_init_float(&yaw_subject, lv_gltf_get_yaw(viewer));
+    lv_subject_init_float(&pitch_subject, lv_gltf_get_pitch(viewer));
     lv_subject_init_int(&animation_speed_subject, LV_GLTF_ANIM_SPEED_NORMAL);
     lv_subject_init_int(&animation_subject, lv_gltf_model_get_animation(lv_gltf_get_primary_model(viewer)));
     lv_subject_add_observer(&animation_subject, animation_observer_cb, viewer);
     lv_subject_add_observer(&animation_speed_subject, animation_speed_observer_cb, viewer);
+    lv_subject_add_observer_obj(&pitch_subject, viewer_observer_float_cb, viewer, pitch_fn.ptr);
+    lv_subject_add_observer_obj(&yaw_subject, viewer_observer_float_cb, viewer, yaw_fn.ptr);
 }
 
 static void init_checkbox_states(void)
@@ -2004,7 +2047,7 @@ static void create_control_panel(lv_obj_t * viewer)
 {
     lv_obj_t * control_panel = lv_obj_create(viewer);
     lv_obj_set_size(control_panel, LV_PCT(20), LV_PCT(100));
-    lv_obj_align_to(control_panel, viewer, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_align(control_panel, LV_ALIGN_RIGHT_MID, 0, 0);
     style_control_panel(control_panel);
 
     create_about_panel(control_panel, viewer);
@@ -2018,6 +2061,7 @@ static void create_control_panel(lv_obj_t * viewer)
 
     create_camera_panel(control_panel, viewer);
     create_options_panel(control_panel, viewer);
+
     //create_animation_panel(control_panel, viewer);
     //create_background_panel(control_panel);
     //create_antialiasing_panel(control_panel);
@@ -2028,13 +2072,14 @@ static void create_about_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
     LV_UNUSED(viewer);
 
-    lv_obj_t * panel = add_foldout_header(parent, "About");
+    // lv_obj_t * panel = add_foldout_header(parent, "About");
 
-    logo_viewer = lv_gltf_create(panel);
+    logo_viewer = lv_gltf_create(parent);
     lv_obj_set_size(logo_viewer, 128, 64);
-    lv_obj_set_style_pad_all(panel, 0, 0);
+    lv_obj_set_style_pad_top(parent, 25, 0);
+    lv_obj_set_style_pad_bottom(parent, 25, 0);
     lv_obj_set_style_pad_all(logo_viewer, 0, 0);
-    lv_obj_set_style_margin_all(panel, 0, 0);
+    lv_obj_set_style_margin_all(parent, 0, 0);
     lv_obj_set_style_margin_all(logo_viewer, 0, 0);
     lv_obj_set_style_margin_top(logo_viewer, -12, 0);
     lv_obj_set_style_margin_left(logo_viewer, 10, 0);
@@ -2049,7 +2094,7 @@ static void create_about_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_gltf_set_camera(logo_viewer, 1);
     lv_gltf_set_antialiasing_mode(logo_viewer, LV_GLTF_AA_MODE_ON);
 
-    lv_obj_t * title_label = lv_label_create(panel);
+    lv_obj_t * title_label = lv_label_create(parent);
     lv_label_set_text_static(title_label, "   9.5.0   ");
     lv_obj_set_style_text_font(title_label, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(title_label, lv_color_white(), 0);
@@ -2059,7 +2104,7 @@ static void create_about_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_bg_color(title_label, lv_color_hex3(0x000000), 0);
     lv_obj_set_style_bg_opa(title_label, LV_OPA_50, 0);
     lv_obj_set_style_radius(title_label, 3, 0);
-    add_sep(panel);
+    add_sep(parent);
 }
 
 static void create_doors_panel(lv_obj_t * parent, lv_obj_t * viewer)
@@ -2067,8 +2112,9 @@ static void create_doors_panel(lv_obj_t * parent, lv_obj_t * viewer)
     LV_UNUSED(viewer);
     lv_obj_t * panel = add_foldout_header(parent, "Doors");
     lv_obj_set_style_pad_top(panel, 0,
-                             LV_PART_MAIN); /* A little bit of extra space on top since this is the first sub-panel */
+                             LV_PART_MAIN);
 
+    /* --- Open All / Close All row --- */
     lv_obj_t * doors_button_row = add_row(panel);
     lv_obj_set_flex_flow(doors_button_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(doors_button_row, 15, LV_PART_MAIN);
@@ -2077,64 +2123,136 @@ static void create_doors_panel(lv_obj_t * parent, lv_obj_t * viewer)
 
     open_all_doors_btn = add_labeled_event_button_to_row(doors_button_row, lv_color_hex(0xFF6B35), "Open All",
                                                          open_all_doors_event_handler);
+    style_toggle_button(open_all_doors_btn, lv_color_hex(0xFF6B35));
+
     close_all_doors_btn = add_labeled_event_button_to_row(doors_button_row, lv_color_hex(0xFF6B35), "Close All",
                                                           close_all_doors_event_handler);
+    style_toggle_button(close_all_doors_btn, lv_color_hex(0xFF6B35));
     lv_obj_add_flag(close_all_doors_btn, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t * doors_checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(doors_checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(doors_checkbox_row, 15, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(doors_checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(doors_checkbox_row, 0, LV_PART_MAIN);
+    /* --- 2x2 door grid --- */
+    lv_obj_t * door_grid = add_row(panel);
+    lv_obj_set_flex_flow(door_grid, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_style_pad_all(door_grid, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(door_grid, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(door_grid, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(door_grid, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(door_grid, 8, LV_PART_MAIN);
 
-    door_FD_open_close->checkbox = add_checkbox_to_row(doors_checkbox_row, lv_color_hex(0xFF6B35),
-                                                       toggle_door_FD_event_handler);
-    door_FP_open_close->checkbox = add_checkbox_to_row(doors_checkbox_row, lv_color_hex(0xFF6B35),
-                                                       toggle_door_FP_event_handler);
-    door_BD_open_close->checkbox = add_checkbox_to_row(doors_checkbox_row, lv_color_hex(0xFF6B35),
-                                                       toggle_door_BD_event_handler);
-    door_BP_open_close->checkbox = add_checkbox_to_row(doors_checkbox_row, lv_color_hex(0xFF6B35),
-                                                       toggle_door_BP_event_handler);
+    /* Row 1: Front Driver | Front Passenger */
+    door_FD_open_close->checkbox = add_labeled_event_button_to_row(door_grid, lv_color_hex(0xFF6B35), "Driver",
+                                                                   toggle_door_FD_event_handler);
+    lv_obj_set_size(door_FD_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(door_FD_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(door_FD_open_close->checkbox, lv_color_hex(0xFF6B35));
 
-    hood_open_close->checkbox = add_labeled_checkbox_row(panel, "Hood", toggle_hood_event_handler);
-    tailgate_open_close->checkbox = add_labeled_checkbox_row(panel, "Tailgate", toggle_tailgate_event_handler);
+    door_FP_open_close->checkbox = add_labeled_event_button_to_row(door_grid, lv_color_hex(0xFF6B35), "Passenger",
+                                                                   toggle_door_FP_event_handler);
+    lv_obj_set_size(door_FP_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(door_FP_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(door_FP_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    /* Row 2: Back Driver | Back Passenger */
+    door_BD_open_close->checkbox = add_labeled_event_button_to_row(door_grid, lv_color_hex(0xFF6B35), "Rear Left",
+                                                                   toggle_door_BD_event_handler);
+    lv_obj_set_size(door_BD_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(door_BD_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(door_BD_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    door_BP_open_close->checkbox = add_labeled_event_button_to_row(door_grid, lv_color_hex(0xFF6B35), "Rear Right",
+                                                                   toggle_door_BP_event_handler);
+    lv_obj_set_size(door_BP_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(door_BP_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(door_BP_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    /* --- Hood + Tailgate row --- */
+    lv_obj_t * extra_row = add_row(panel);
+    lv_obj_set_flex_flow(extra_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(extra_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(extra_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(extra_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(extra_row, 8, LV_PART_MAIN);
+
+    hood_open_close->checkbox = add_labeled_event_button_to_row(extra_row, lv_color_hex(0xFF6B35), "Hood",
+                                                                toggle_hood_event_handler);
+    lv_obj_set_size(hood_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(hood_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(hood_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    tailgate_open_close->checkbox = add_labeled_event_button_to_row(extra_row, lv_color_hex(0xFF6B35), "Tailgate",
+                                                                    toggle_tailgate_event_handler);
+    lv_obj_set_size(tailgate_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(tailgate_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(tailgate_open_close->checkbox, lv_color_hex(0xFF6B35));
 
     add_sep(panel);
 }
-
 static void create_windows_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
-
     LV_UNUSED(viewer);
     lv_obj_t * panel = add_foldout_header(parent, "Windows");
 
+    /* --- Open All / Close All row --- */
     lv_obj_t * windows_row = add_row(panel);
+    lv_obj_set_flex_flow(windows_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(windows_row, 15, LV_PART_MAIN);
     lv_obj_set_style_pad_top(windows_row, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_bottom(windows_row, 0, LV_PART_MAIN);
 
     open_all_windows_btn = add_labeled_event_button_to_row(windows_row, lv_color_hex(0xFF6B35), "Open All",
                                                            open_all_windows_event_handler);
+    style_toggle_button(open_all_windows_btn, lv_color_hex(0xFF6B35));
+
     close_all_windows_btn = add_labeled_event_button_to_row(windows_row, lv_color_hex(0xFF6B35), "Close All",
                                                             close_all_windows_event_handler);
+    style_toggle_button(close_all_windows_btn, lv_color_hex(0xFF6B35));
     lv_obj_add_flag(close_all_windows_btn, LV_OBJ_FLAG_HIDDEN);
 
-    lv_obj_t * windows_checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(windows_checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(windows_checkbox_row, 15, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(windows_checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(windows_checkbox_row, 0, LV_PART_MAIN);
+    /* --- 2x2 window grid --- */
+    lv_obj_t * window_grid = add_row(panel);
+    lv_obj_set_flex_flow(window_grid, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_style_pad_all(window_grid, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(window_grid, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(window_grid, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(window_grid, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(window_grid, 8, LV_PART_MAIN);
 
-    window_FD_open_close->checkbox = add_checkbox_to_row(windows_checkbox_row, lv_color_hex(0xFF6B35),
-                                                         toggle_window_FD_event_handler);
-    window_FP_open_close->checkbox = add_checkbox_to_row(windows_checkbox_row, lv_color_hex(0xFF6B35),
-                                                         toggle_window_FP_event_handler);
-    window_BD_open_close->checkbox = add_checkbox_to_row(windows_checkbox_row, lv_color_hex(0xFF6B35),
-                                                         toggle_window_BD_event_handler);
-    window_BP_open_close->checkbox = add_checkbox_to_row(windows_checkbox_row, lv_color_hex(0xFF6B35),
-                                                         toggle_window_BP_event_handler);
+    window_FD_open_close->checkbox = add_labeled_event_button_to_row(window_grid, lv_color_hex(0xFF6B35), "Driver",
+                                                                     toggle_window_FD_event_handler);
+    lv_obj_set_size(window_FD_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(window_FD_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(window_FD_open_close->checkbox, lv_color_hex(0xFF6B35));
 
-    sunroof_open_close->checkbox = add_labeled_checkbox_row(panel, "Sunroof", toggle_sunroof_event_handler);
+    window_FP_open_close->checkbox = add_labeled_event_button_to_row(window_grid, lv_color_hex(0xFF6B35), "Passenger",
+                                                                     toggle_window_FP_event_handler);
+    lv_obj_set_size(window_FP_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(window_FP_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(window_FP_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    window_BD_open_close->checkbox = add_labeled_event_button_to_row(window_grid, lv_color_hex(0xFF6B35), "Rear Left",
+                                                                     toggle_window_BD_event_handler);
+    lv_obj_set_size(window_BD_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(window_BD_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(window_BD_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    window_BP_open_close->checkbox = add_labeled_event_button_to_row(window_grid, lv_color_hex(0xFF6B35), "Rear Right",
+                                                                     toggle_window_BP_event_handler);
+    lv_obj_set_size(window_BP_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(window_BP_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(window_BP_open_close->checkbox, lv_color_hex(0xFF6B35));
+
+    /* --- Sunroof row --- */
+    lv_obj_t * sunroof_row = add_row(panel);
+    lv_obj_set_flex_flow(sunroof_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(sunroof_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(sunroof_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(sunroof_row, 8, LV_PART_MAIN);
+
+    sunroof_open_close->checkbox = add_labeled_event_button_to_row(sunroof_row, lv_color_hex(0xFF6B35), "Sunroof",
+                                                                   toggle_sunroof_event_handler);
+    lv_obj_set_size(sunroof_open_close->checkbox, LV_PCT(47), 34);
+    lv_obj_add_flag(sunroof_open_close->checkbox, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(sunroof_open_close->checkbox, lv_color_hex(0xFF6B35));
 
     add_sep(panel);
 }
@@ -2142,40 +2260,46 @@ static void create_windows_panel(lv_obj_t * parent, lv_obj_t * viewer)
 static void create_paint_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
     LV_UNUSED(viewer);
-
     lv_obj_t * panel = add_foldout_header(parent, "Paint");
 
+    /* --- Paint color selection row --- */
     lv_obj_t * paint_row = add_row(panel);
     lv_obj_set_flex_flow(paint_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(paint_row, 15, LV_PART_MAIN);
     lv_obj_set_style_pad_top(paint_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(paint_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_bottom(paint_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(paint_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(paint_row, 8, LV_PART_MAIN);
 
-    lv_obj_t * paintset_A_btn = add_labeled_event_button_to_row(paint_row, lv_color_hex(0xFF6B35), "A",
-                                                                select_paintset_A_event_handler);
-    lv_obj_set_size(paintset_A_btn, LV_PCT(20), 30);
-    lv_obj_t * paintset_B_btn = add_labeled_event_button_to_row(paint_row, lv_color_hex(0xFF6B35), "B",
-                                                                select_paintset_B_event_handler);
-    lv_obj_set_size(paintset_B_btn, LV_PCT(20), 30);
-    lv_obj_t * paintset_C_btn = add_labeled_event_button_to_row(paint_row, lv_color_hex(0xFF6B35), "C",
-                                                                select_paintset_C_event_handler);
-    lv_obj_set_size(paintset_C_btn, LV_PCT(20), 30);
+    paintset_red->button = add_labeled_event_button_to_row(paint_row, lv_color_hex(0xCC2200), "Red",
+                                                           select_paintset_A_event_handler);
+    lv_obj_set_size(paintset_red->button, LV_PCT(30), 34);
+    lv_obj_add_flag(paintset_red->button, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(paintset_red->button, lv_color_hex(0xCC2200));
 
-    lv_obj_t * paint_checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(paint_checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(paint_checkbox_row, 15, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(paint_checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(paint_checkbox_row, 0, LV_PART_MAIN);
+    paintset_gray->button = add_labeled_event_button_to_row(paint_row, lv_color_hex(0x888888), "Gray",
+                                                            select_paintset_B_event_handler);
+    lv_obj_set_size(paintset_gray->button, LV_PCT(30), 34);
+    lv_obj_add_flag(paintset_gray->button, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(paintset_gray->button, lv_color_hex(0x888888));
 
-    paintset_A->checkbox = add_checkbox_to_row(paint_checkbox_row, lv_color_hex(0xFF6B35), select_paintset_A_event_handler);
-    lv_obj_set_size(paintset_A->checkbox, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    paintset_B->checkbox = add_checkbox_to_row(paint_checkbox_row, lv_color_hex(0xFF6B35), select_paintset_B_event_handler);
-    lv_obj_set_size(paintset_B->checkbox, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    paintset_C->checkbox = add_checkbox_to_row(paint_checkbox_row, lv_color_hex(0xFF6B35), select_paintset_C_event_handler);
-    lv_obj_set_size(paintset_C->checkbox, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
+    paintset_green->button = add_labeled_event_button_to_row(paint_row, lv_color_hex(0x2E7D32), "Green",
+                                                             select_paintset_C_event_handler);
+    lv_obj_set_size(paintset_green->button, LV_PCT(30), 34);
+    lv_obj_add_flag(paintset_green->button, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(paintset_green->button, lv_color_hex(0x2E7D32));
 
-    dirty_checkbox = add_labeled_checkbox_row(panel, "Dirty", toggle_dirty_event_handler);
+    /* --- Add Mud / Remove Mud row --- */
+    lv_obj_t * mud_row = add_row(panel);
+    lv_obj_set_flex_flow(mud_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(mud_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(mud_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(mud_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(mud_row, 8, LV_PART_MAIN);
+
+    mud_toggle_btn = add_labeled_event_button_to_row(mud_row, lv_color_hex(0xFF6B35), "Add Mud",
+                                                     toggle_mud_event_handler);
+    style_toggle_button(mud_toggle_btn, lv_color_hex(0xFF6B35));
+    lv_obj_add_state(mud_toggle_btn, LV_STATE_CHECKED);
 
     add_sep(panel);
 }
@@ -2185,6 +2309,7 @@ static void create_speed_panel(lv_obj_t * parent, lv_obj_t * viewer)
     LV_UNUSED(viewer);
     lv_obj_t * panel = add_foldout_header(parent, "Speed");
 
+    /* --- Gas / Brake row --- */
     lv_obj_t * speed_row4 = add_row(panel);
     lv_obj_set_flex_flow(speed_row4, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(speed_row4, 15, LV_PART_MAIN);
@@ -2210,6 +2335,7 @@ static void create_speed_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_text_color(brakes_btn_label, lv_color_white(), 0);
     lv_obj_center(brakes_btn_label);
 
+    /* --- Speed readout row --- */
     lv_obj_t * speed_row3 = add_row(panel);
     lv_obj_set_flex_flow(speed_row3, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(speed_row3, 15, LV_PART_MAIN);
@@ -2222,8 +2348,6 @@ static void create_speed_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_text_color(speed_label, lv_color_white(), 0);
 #if LV_FONT_MONTSERRAT_26
     lv_obj_set_style_text_font(speed_label, &lv_font_montserrat_26, 0);
-#else
-    LV_LOG_WARN("LV_FONT_MONTSERRAT_26 is not enabled for the gltf truck demo. Using LV_FONT_DEFAULT instead.");
 #endif
     lv_obj_center(speed_label);
     tireset_controller->label_speed = speed_label;
@@ -2231,9 +2355,11 @@ static void create_speed_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_t * speed_slider_label = lv_label_create(speed_row3);
     lv_label_set_text_static(speed_slider_label, "km/h");
     lv_obj_set_style_text_color(speed_slider_label, lv_color_white(), 0);
+
     lv_obj_center(speed_slider_label);
     tireset_controller->label_speed_type = speed_slider_label;
 
+    /* --- Speed slider row --- */
     lv_obj_t * speed_row2 = add_row(panel);
     lv_obj_set_flex_flow(speed_row2, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(speed_row2, 15, LV_PART_MAIN);
@@ -2242,48 +2368,43 @@ static void create_speed_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_margin_bottom(speed_row2, 4, LV_PART_MAIN);
 
     lv_obj_t * speed_slider = add_slider_to_row(speed_row2, lv_color_hex(0xFF6B35));
-
     lv_obj_add_event_cb(speed_slider, select_speed_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
     lv_slider_set_min_value(speed_slider, 0);
+    lv_obj_set_style_pad_all(speed_slider, 5, LV_PART_MAIN);
     lv_slider_set_max_value(speed_slider, MAX_SPIN_SLIDER_VALUE);
     tireset_controller->slider_speed = speed_slider;
 
-    lv_obj_t * speed_row = add_row(panel);
-    lv_obj_set_flex_flow(speed_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_all(speed_row, 15, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(speed_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(speed_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_margin_bottom(speed_row, 0, LV_PART_MAIN);
+    /* --- Unit toggle row --- */
+    lv_obj_t * unit_row = add_row(panel);
+    lv_obj_set_flex_flow(unit_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(unit_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(unit_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(unit_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(unit_row, 8, LV_PART_MAIN);
 
-    lv_obj_t * mph_btn = add_labeled_event_button_to_row(speed_row, lv_color_hex(0xFF6B35), "mile",
+    lv_obj_t * mph_btn = add_labeled_event_button_to_row(unit_row, lv_color_hex(0xFF6B35), "mph",
                                                          select_mph_event_handler);
-    lv_obj_set_size(mph_btn, LV_PCT(40), 30);
-    lv_obj_t * kmph_btn = add_labeled_event_button_to_row(speed_row, lv_color_hex(0xFF6B35), "km",
+    lv_obj_set_size(mph_btn, LV_PCT(47), 34);
+    lv_obj_add_flag(mph_btn, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(mph_btn, lv_color_hex(0xFF6B35));
+    tireset_controller->checkbox_mph = mph_btn;
+
+    lv_obj_t * kmph_btn = add_labeled_event_button_to_row(unit_row, lv_color_hex(0xFF6B35), "km/h",
                                                           select_kmph_event_handler);
-    lv_obj_set_size(kmph_btn, LV_PCT(40), 30);
-
-    lv_obj_t * checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(checkbox_row, 30, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(checkbox_row, 0, LV_PART_MAIN);
-
-    tireset_controller->checkbox_mph = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35), select_mph_event_handler);
-    lv_obj_set_size(tireset_controller->checkbox_mph, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    tireset_controller->checkbox_kmph = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                            select_kmph_event_handler);
-    lv_obj_set_size(tireset_controller->checkbox_kmph, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
+    lv_obj_set_size(kmph_btn, LV_PCT(47), 34);
+    lv_obj_add_flag(kmph_btn, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(kmph_btn, lv_color_hex(0xFF6B35));
+    tireset_controller->checkbox_kmph = kmph_btn;
 
     add_sep(panel);
-
 }
 
 static void create_steering_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
     LV_UNUSED(viewer);
-
     lv_obj_t * panel = add_foldout_header(parent, "Steering");
 
+    /* --- Steering slider row --- */
     lv_obj_t * steering_row2 = add_row(panel);
     lv_obj_set_flex_flow(steering_row2, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(steering_row2, 15, LV_PART_MAIN);
@@ -2292,7 +2413,6 @@ static void create_steering_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_margin_bottom(steering_row2, 4, LV_PART_MAIN);
 
     lv_obj_t * steering_slider = add_slider_to_row(steering_row2, lv_color_hex(0xFF6B35));
-
     lv_slider_set_min_value(steering_slider, -MIN_MAX_STEER_SLIDER_VALUE);
     lv_slider_set_max_value(steering_slider, MIN_MAX_STEER_SLIDER_VALUE);
     lv_slider_set_value(steering_slider, 0, LV_ANIM_OFF);
@@ -2301,52 +2421,44 @@ static void create_steering_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_add_event_cb(steering_slider, select_steering_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
     tireset_controller->slider_steering = steering_slider;
 
+    /* --- Blinker buttons row --- */
     lv_obj_t * steering_row = add_row(panel);
     lv_obj_set_flex_flow(steering_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_all(steering_row, 15, LV_PART_MAIN);
     lv_obj_set_style_pad_top(steering_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(steering_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(steering_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(steering_row, 8, LV_PART_MAIN);
     lv_obj_set_style_margin_bottom(steering_row, 0, LV_PART_MAIN);
 
-    lv_obj_t * left_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFF6B35));
-    lv_obj_set_size(left_blinker_btn, LV_PCT(25), 30);
+    left_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFF6B35));
+    lv_obj_set_size(left_blinker_btn, LV_PCT(30), 34);
+    lv_obj_add_flag(left_blinker_btn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_event_cb(left_blinker_btn, select_left_blinker_event_handler, LV_EVENT_CLICKED, NULL);
-    lv_obj_t * left_blinker_btn_label = lv_label_create(left_blinker_btn);
-    lv_label_set_text_static(left_blinker_btn_label, LV_SYMBOL_LEFT);
-    lv_obj_set_style_text_color(left_blinker_btn_label, lv_color_white(), 0);
-    lv_obj_center(left_blinker_btn_label);
+    style_toggle_button(left_blinker_btn, lv_color_hex(0xFF6B35));
+    lv_obj_t * left_blinker_label = lv_label_create(left_blinker_btn);
+    lv_label_set_text_static(left_blinker_label, LV_SYMBOL_LEFT);
+    lv_obj_set_style_text_color(left_blinker_label, lv_color_white(), 0);
+    lv_obj_center(left_blinker_label);
 
-    lv_obj_t * hazard_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFF6B35));
-    lv_obj_set_size(hazard_blinker_btn, LV_PCT(25), 30);
+    hazard_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFFB300));
+    lv_obj_set_size(hazard_blinker_btn, LV_PCT(30), 34);
+    lv_obj_add_flag(hazard_blinker_btn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_event_cb(hazard_blinker_btn, select_hazard_blinker_event_handler, LV_EVENT_CLICKED, NULL);
-    lv_obj_t * hazard_blinker_btn_label = lv_label_create(hazard_blinker_btn);
-    lv_label_set_text_static(hazard_blinker_btn_label, LV_SYMBOL_WARNING);
-    lv_obj_set_style_text_color(hazard_blinker_btn_label, lv_color_white(), 0);
-    lv_obj_center(hazard_blinker_btn_label);
+    style_toggle_button(hazard_blinker_btn, lv_color_hex(0xFFB300));
+    lv_obj_t * hazard_blinker_label = lv_label_create(hazard_blinker_btn);
+    lv_label_set_text_static(hazard_blinker_label, LV_SYMBOL_WARNING);
+    lv_obj_set_style_text_color(hazard_blinker_label, lv_color_white(), 0);
+    lv_obj_center(hazard_blinker_label);
 
-    lv_obj_t * right_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFF6B35));
-    lv_obj_set_size(right_blinker_btn, LV_PCT(25), 30);
+    right_blinker_btn = add_button_to_row(steering_row, lv_color_hex(0xFF6B35));
+    lv_obj_set_size(right_blinker_btn, LV_PCT(30), 34);
+    lv_obj_add_flag(right_blinker_btn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_add_event_cb(right_blinker_btn, select_right_blinker_event_handler, LV_EVENT_CLICKED, NULL);
-    lv_obj_t * right_blinker_btn_label = lv_label_create(right_blinker_btn);
-    lv_label_set_text_static(right_blinker_btn_label, LV_SYMBOL_RIGHT);
-    lv_obj_set_style_text_color(right_blinker_btn_label, lv_color_white(), 0);
-    lv_obj_center(right_blinker_btn_label);
-
-    lv_obj_t * checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(checkbox_row, 19, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(checkbox_row, 0, LV_PART_MAIN);
-
-    lights_controller->checkbox_left_blinker = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                   select_left_blinker_event_handler);
-    lv_obj_set_size(lights_controller->checkbox_left_blinker, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    lights_controller->checkbox_hazard_blinker = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                     select_hazard_blinker_event_handler);
-    lv_obj_set_size(lights_controller->checkbox_hazard_blinker, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    lights_controller->checkbox_right_blinker = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                    select_right_blinker_event_handler);
-    lv_obj_set_size(lights_controller->checkbox_right_blinker, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
+    style_toggle_button(right_blinker_btn, lv_color_hex(0xFF6B35));
+    lv_obj_t * right_blinker_label = lv_label_create(right_blinker_btn);
+    lv_label_set_text_static(right_blinker_label, LV_SYMBOL_RIGHT);
+    lv_obj_set_style_text_color(right_blinker_label, lv_color_white(), 0);
+    lv_obj_center(right_blinker_label);
 
     add_sep(panel);
 }
@@ -2376,51 +2488,148 @@ static void create_wipers_panel(lv_obj_t * parent, lv_obj_t * viewer)
     lv_obj_set_style_pad_bottom(wipers_row, 0, LV_PART_MAIN);
     lv_obj_set_style_margin_bottom(wipers_row, 0, LV_PART_MAIN);
 
-    lv_obj_t * wipers_low_btn = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "1",
-                                                                select_wipers_low_event_handler);
-    lv_obj_set_size(wipers_low_btn, LV_PCT(25), 30);
-    lv_obj_t * wipers_med_btn = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "2",
-                                                                select_wipers_med_event_handler);
-    lv_obj_set_size(wipers_med_btn, LV_PCT(25), 30);
-    lv_obj_t * wipers_high_btn = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "3",
-                                                                 select_wipers_high_event_handler);
-    lv_obj_set_size(wipers_high_btn, LV_PCT(25), 30);
+    wipers_controller->btn_wipers_low = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "Slow",
+                                                                        select_wipers_low_event_handler);
+    lv_obj_set_size(wipers_controller->btn_wipers_low, LV_PCT(25), 30);
+    lv_obj_add_flag(wipers_controller->btn_wipers_low, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(wipers_controller->btn_wipers_low, lv_color_hex(0xFF6B35));
 
-    lv_obj_t * checkbox_row = add_row(panel);
-    lv_obj_set_flex_flow(checkbox_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(checkbox_row, 19, LV_PART_MAIN);
-    lv_obj_set_style_pad_top(checkbox_row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_bottom(checkbox_row, 0, LV_PART_MAIN);
+    wipers_controller->btn_wipers_med = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "Medium",
+                                                                        select_wipers_med_event_handler);
+    style_toggle_button(wipers_controller->btn_wipers_med, lv_color_hex(0xFF6B35));
 
-    wipers_controller->checkbox_wipers_low = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                 select_wipers_low_event_handler);
-    lv_obj_set_size(wipers_controller->checkbox_wipers_low, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    wipers_controller->checkbox_wipers_med = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                 select_wipers_med_event_handler);
-    lv_obj_set_size(wipers_controller->checkbox_wipers_med, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
-    wipers_controller->checkbox_wipers_high = add_checkbox_to_row(checkbox_row, lv_color_hex(0xFF6B35),
-                                                                  select_wipers_high_event_handler);
-    lv_obj_set_size(wipers_controller->checkbox_wipers_high, LV_PCT(20), LV_TRUCK_DEMO_CHECKBOX_HEIGHT);
+    lv_obj_set_size(wipers_controller->btn_wipers_med, LV_PCT(25), 30);
+    wipers_controller->btn_wipers_high = add_labeled_event_button_to_row(wipers_row, lv_color_hex(0xFF6B35), "Fast",
+                                                                         select_wipers_high_event_handler);
+    lv_obj_set_size(wipers_controller->btn_wipers_high, LV_PCT(25), 30);
+    style_toggle_button(wipers_controller->btn_wipers_high, lv_color_hex(0xFF6B35));
 
     add_sep(panel);
 }
-
 static void create_camera_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
     lv_obj_t * panel = add_foldout_header(parent, "Cameras");
-    camera_controller->checkbox_camera_interior = add_labeled_checkbox_row(panel, "Interior",
-                                                                           select_camera_interior_event_handler);
-    camera_controller->checkbox_camera_exterior = add_labeled_checkbox_row(panel, "Exterior",
-                                                                           select_camera_exterior_event_handler);
+
+    lv_obj_t * camera_row = add_row(panel);
+    lv_obj_set_flex_flow(camera_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(camera_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(camera_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(camera_row, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(camera_row, 8, LV_PART_MAIN);
+
+    camera_controller->checkbox_camera_interior = add_labeled_event_button_to_row(camera_row,
+                                                                                  lv_color_hex(0xFF6B35),
+                                                                                  "Interior",
+                                                                                  select_camera_interior_event_handler);
+    lv_obj_set_size(camera_controller->checkbox_camera_interior, LV_PCT(30), 34);
+    lv_obj_add_flag(camera_controller->checkbox_camera_interior, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(camera_controller->checkbox_camera_interior, lv_color_hex(0xFF6B35));
+
+    camera_controller->checkbox_camera_exterior = add_labeled_event_button_to_row(camera_row,
+                                                                                  lv_color_hex(0xFF6B35),
+                                                                                  "Exterior",
+                                                                                  select_camera_exterior_event_handler);
+    lv_obj_set_size(camera_controller->checkbox_camera_exterior, LV_PCT(30), 34);
+    lv_obj_add_flag(camera_controller->checkbox_camera_exterior, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(camera_controller->checkbox_camera_exterior, lv_color_hex(0xFF6B35));
+
+    camera_controller->checkbox_camera_free = add_labeled_event_button_to_row(camera_row,
+                                                                              lv_color_hex(0xFF6B35),
+                                                                              "Free",
+                                                                              select_camera_free_event_handler);
+    lv_obj_set_size(camera_controller->checkbox_camera_free, LV_PCT(30), 34);
+    lv_obj_add_flag(camera_controller->checkbox_camera_free, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(camera_controller->checkbox_camera_free, lv_color_hex(0xFF6B35));
+
     camera_controller->viewer = viewer;
     add_sep(panel);
 }
+
+static void select_resolution_event_handler(lv_event_t * e)
+{
+    lv_obj_t * dropdown = lv_event_get_target(e);
+    uint16_t idx = lv_dropdown_get_selected(dropdown);
+    static const struct {
+        int w, h;
+    } resolutions[] = {
+        {800,  480}, {800,  600},
+        {1024, 600}, {1024, 768}, {1024, 800},
+        {1280, 720}, {1280, 800},
+        {1366, 768},
+        {1920, 1080}
+    };
+
+    lv_display_set_resolution(NULL, resolutions[idx].w, resolutions[idx].h);
+}
+
 
 static void create_options_panel(lv_obj_t * parent, lv_obj_t * viewer)
 {
     LV_UNUSED(viewer);
     lv_obj_t * panel = add_foldout_header(parent, "Options");
-    checkbox_antialiasing = add_labeled_checkbox_row(panel, "Anti-Alias", toggle_antialias_event_handler);
+
+    /* --- Resolution label --- */
+    lv_obj_t * res_label_row = add_row(panel);
+    lv_obj_set_flex_flow(res_label_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(res_label_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(res_label_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(res_label_row, 4, LV_PART_MAIN);
+
+    lv_obj_t * res_label = lv_label_create(res_label_row);
+    lv_label_set_text_static(res_label, "Resolution");
+    lv_obj_set_style_text_color(res_label, lv_color_hex(0x888888), 0);
+
+    /* --- Resolution dropdown --- */
+    lv_obj_t * res_row = add_row(panel);
+    lv_obj_set_flex_flow(res_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(res_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(res_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(res_row, 8, LV_PART_MAIN);
+
+    lv_obj_t * res_dropdown = lv_dropdown_create(res_row);
+    lv_dropdown_set_options_static(res_dropdown,
+                                   "800 x 480\n"
+                                   "800 x 600\n"
+                                   "1024 x 600\n"
+                                   "1024 x 768\n"
+                                   "1024 x 800\n"
+                                   "1280 x 720\n"
+                                   "1280 x 800\n"
+                                   "1366 x 768\n"
+                                   "1920 x 1080");
+    lv_obj_set_width(res_dropdown, LV_PCT(90));
+    lv_obj_add_event_cb(res_dropdown, select_resolution_event_handler, LV_EVENT_VALUE_CHANGED, NULL);
+
+    /* Style the dropdown to match the dark theme */
+    lv_obj_set_style_bg_color(res_dropdown, lv_color_hex(0x1A1A1A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(res_dropdown, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_width(res_dropdown, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(res_dropdown, 8, LV_PART_MAIN);
+    lv_obj_set_style_text_color(res_dropdown, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(res_dropdown, 0, LV_PART_MAIN);
+
+    /* Style the dropdown list */
+    lv_obj_t * res_list = lv_dropdown_get_list(res_dropdown);
+    lv_obj_set_style_bg_color(res_list, lv_color_hex(0x1A1A1A), LV_PART_MAIN);
+    lv_obj_set_style_border_color(res_list, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_width(res_list, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(res_list, 8, LV_PART_MAIN);
+    lv_obj_set_style_text_color(res_list, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(res_list, lv_color_hex(0xFF6B35), LV_PART_SELECTED | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(res_list, lv_color_white(), LV_PART_SELECTED | LV_STATE_CHECKED);
+
+    /* --- Anti-alias toggle --- */
+    lv_obj_t * antialias_row = add_row(panel);
+    lv_obj_set_flex_flow(antialias_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_all(antialias_row, 15, LV_PART_MAIN);
+    lv_obj_set_style_pad_top(antialias_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_bottom(antialias_row, 8, LV_PART_MAIN);
+
+    checkbox_antialiasing = add_labeled_event_button_to_row(antialias_row, lv_color_hex(0xFF6B35), "Anti-Alias",
+                                                            toggle_antialias_event_handler);
+    lv_obj_set_size(checkbox_antialiasing, LV_PCT(60), 34);
+    lv_obj_add_flag(checkbox_antialiasing, LV_OBJ_FLAG_CHECKABLE);
+    style_toggle_button(checkbox_antialiasing, lv_color_hex(0xFF6B35));
     add_sep(panel);
 }
 
@@ -2508,7 +2717,6 @@ static lv_obj_t * add_button_to_row(lv_obj_t * row, lv_color_t color)
 static lv_obj_t * add_labeled_event_button_to_row(lv_obj_t * row, lv_color_t color, const char * label,
                                                   lv_event_cb_t event_cb)
 {
-
     lv_obj_t * button = add_button_to_row(row, color);
     lv_obj_add_event_cb(button, event_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t * button_label = lv_label_create(button);
@@ -2556,11 +2764,74 @@ static lv_obj_t * add_labeled_checkbox_row(lv_obj_t * panel, const char * label,
     lv_obj_set_style_pad_top(checkbox_label, 2, LV_PART_MAIN);
     lv_label_set_text_static(checkbox_label, label);
     lv_obj_set_style_text_color(checkbox_label, lv_color_white(), 0);
-
+    style_checkbox(checkbox, lv_color_hex(0xFF6B35));
     return checkbox;
 }
 
 
+static void style_checkbox(lv_obj_t * checkbox, lv_color_t accent_color)
+{
+    /* --- Tick box (the square) --- */
+    lv_obj_set_style_radius(checkbox, 6, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(checkbox, lv_color_hex(0x1A1A1A), LV_PART_INDICATOR);
+    lv_obj_set_style_border_width(checkbox, 2, LV_PART_INDICATOR);
+    lv_obj_set_style_border_color(checkbox, lv_color_hex(0x444444), LV_PART_INDICATOR);
+
+    /* Checked state */
+    lv_obj_set_style_bg_color(checkbox, accent_color, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(checkbox, accent_color, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_width(checkbox, 8, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_color(checkbox, accent_color, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_opa(checkbox, 150, LV_PART_INDICATOR | LV_STATE_CHECKED);
+
+    /* Pressed state */
+    lv_obj_set_style_bg_color(checkbox, lv_color_mix(accent_color, lv_color_black(), 180),
+                              LV_PART_INDICATOR | LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(checkbox, accent_color,
+                                  LV_PART_INDICATOR | LV_STATE_PRESSED);
+
+    lv_obj_set_style_bg_color(checkbox, lv_color_hex(0x0F0F0F),
+                              LV_PART_INDICATOR | LV_STATE_DISABLED);
+    lv_obj_set_style_border_color(checkbox, lv_color_hex(0x222222),
+                                  LV_PART_INDICATOR | LV_STATE_DISABLED);
+    lv_obj_set_style_opa(checkbox, 102, LV_PART_INDICATOR | LV_STATE_DISABLED);
+
+    lv_obj_set_style_shadow_width(checkbox, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(checkbox, LV_OPA_TRANSP, LV_PART_MAIN);
+}
+
+static void style_toggle_button(lv_obj_t * btn, lv_color_t accent_color)
+{
+    /* --- Default (unselected) state --- */
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1A1A1A), LV_PART_MAIN);
+    lv_obj_set_style_radius(btn, 8, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(btn, 0, LV_PART_MAIN);
+
+    /* Label color unselected */
+    lv_obj_set_style_text_color(btn, lv_color_hex(0x888888), LV_PART_MAIN);
+
+    /* --- Pressed state --- */
+    lv_obj_set_style_bg_color(btn, lv_color_mix(accent_color, lv_color_black(), 180),
+                              LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(btn, accent_color, LV_PART_MAIN | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(btn, lv_color_white(), LV_PART_MAIN | LV_STATE_PRESSED);
+
+    /* --- Checked/active state (for toggle buttons) --- */
+    lv_obj_set_style_bg_color(btn, accent_color, LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(btn, accent_color, LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(btn, lv_color_white(), LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_width(btn, 10, LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_color(btn, accent_color, LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_shadow_opa(btn, 150, LV_PART_MAIN | LV_STATE_CHECKED);
+
+    /* --- Disabled state --- */
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x0F0F0F), LV_PART_MAIN | LV_STATE_DISABLED);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x222222), LV_PART_MAIN | LV_STATE_DISABLED);
+    lv_obj_set_style_text_color(btn, lv_color_hex(0x444444), LV_PART_MAIN | LV_STATE_DISABLED);
+    lv_obj_set_style_opa(btn, 102, LV_PART_MAIN | LV_STATE_DISABLED);
+}
 
 static void style_slider(lv_obj_t * slider, lv_color_t accent_color)
 {
@@ -2605,7 +2876,8 @@ static void style_control_panel(lv_obj_t * panel)
     lv_obj_set_style_pad_all(panel, 5, 0);
     lv_obj_set_layout(panel, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(panel, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_set_flex_align(panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_style_bg_opa(panel, 128, LV_PART_MAIN);
 
 }
