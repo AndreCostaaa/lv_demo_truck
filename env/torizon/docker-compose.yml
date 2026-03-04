@@ -1,0 +1,30 @@
+services:
+  lv_demo_truck:
+    image: ghcr.io/andrecostaaa/lv_demo_truck
+    user: torizon
+    depends_on:
+      - weston
+    environment:
+      - XDG_RUNTIME_DIR=/tmp
+    group_add:
+      - video
+    device_cgroup_rules:
+      - "c 226:* rmw"
+    volumes:
+      - /tmp:/tmp
+      - /dev/dri:/dev/dri
+  weston:
+    image: torizon/weston-am62p:4
+    network_mode: host
+    cap_add:
+      - CAP_SYS_TTY_CONFIG
+    volumes:
+      - /dev:/dev
+      - /tmp:/tmp
+      - /run/udev/:/run/udev/
+    device_cgroup_rules:
+      - "c 4:* rmw"
+      - "c 13:* rmw"
+      - "c 226:* rmw"
+      - "c 10:223 rmw"
+    command: --developer
