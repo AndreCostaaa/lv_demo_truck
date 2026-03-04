@@ -104,6 +104,7 @@ static lv_display_t * init_wayland(void)
     if(!disp) {
         LV_LOG_WARN("lv_wayland_window_create failed");
     }
+    lv_wayland_window_set_fullscreen(disp, true);
     LV_LOG_USER("Wayland initialized");
     return disp;
 }
