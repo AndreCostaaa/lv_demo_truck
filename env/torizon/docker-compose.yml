@@ -5,7 +5,7 @@ services:
     depends_on:
       - weston
     environment:
-      - XDG_RUNTIME_DIR=/tmp
+      - XDG_RUNTIME_DIR:/tmp
     group_add:
       - video
     device_cgroup_rules:
