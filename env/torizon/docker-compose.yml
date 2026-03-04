@@ -4,6 +4,7 @@ services:
     user: torizon
     depends_on:
       - weston
+    restart: unless-stopped
     environment:
       - XDG_RUNTIME_DIR:/tmp
     group_add:
@@ -16,6 +17,7 @@ services:
   weston:
     image: torizon/weston-am62p:4
     network_mode: host
+    restart: unless-stopped
     cap_add:
       - CAP_SYS_TTY_CONFIG
     volumes:
