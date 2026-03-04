@@ -100,7 +100,7 @@ static lv_display_t * init_drm(void)
 
 static lv_display_t * init_wayland(void)
 {
-    lv_display_t * disp = lv_wayland_window_create(1024, 600, "Renesas Oven 3D Demo", NULL);
+    lv_display_t * disp = lv_wayland_window_create(1280, 720, "Renesas Oven 3D Demo", NULL);
     if(!disp) {
         LV_LOG_WARN("lv_wayland_window_create failed");
     }
