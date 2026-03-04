@@ -528,7 +528,7 @@ lv_obj_t * lv_demo_truck(const char * assets_path)
     close_hatch(tailgate_open_close);
     close_hatch(hood_open_close);
     close_hatch(sunroof_open_close);
-    set_camera_num(camera_controller, LV_CAMERA_UNSET);
+    set_camera_num(camera_controller, LV_CAMERA_EXTERIOR);
     init_checkbox_states();
     select_paintset_A();
     enable_antialiasing(true);
