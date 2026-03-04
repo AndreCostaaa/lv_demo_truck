@@ -1,8 +1,8 @@
 name: Build Torizon OS Docker Image
-
 on:
   push:
-    branches: ["main"]
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -28,7 +28,10 @@ jobs:
           uses: docker/metadata-action@v5
           with:
             images: ${{matrix.image}}
-            tags: latest
+            tags: |
+              type=semver,pattern={{version}}
+              type=semver,pattern={{major}}.{{minor}}
+              type=raw,value=latest
   
         - name: Set up Docker Buildx
           uses: docker/setup-buildx-action@v3
