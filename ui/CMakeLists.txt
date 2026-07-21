@@ -11,3 +11,5 @@ target_include_directories(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(lv_demo_truck_ui PUBLIC lvgl)
+
+target_include_directories(lv_demo_truck_ui PUBLIC ${CMAKE_CURRENT_LIST_DIR}/..)

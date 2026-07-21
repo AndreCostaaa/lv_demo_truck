@@ -1,4 +1,4 @@
-#include <lvgl.h>
+#include <lvgl/lvgl.h>
 #include <lv_demo_truck/lv_demo_truck.h>
 #include <stdint.h>
 #include <unistd.h>
