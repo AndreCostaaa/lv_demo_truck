@@ -17,4 +17,4 @@ add_subdirectory(${REPO_ROOT}/ui ui)
 
 add_executable(lv_demo_truck ${REPO_ROOT}/src/main.c)
 target_link_libraries(lv_demo_truck_ui PRIVATE lvgl::lvgl)
-target_link_libraries(lv_demo_truck PRIVATE lvgl::lvgl)
+target_link_libraries(lv_demo_truck PRIVATE lvgl::lvgl lv_demo_truck_ui)
